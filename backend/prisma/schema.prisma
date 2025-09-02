@@ -1,15 +1,195 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdEvents NominationEvent[]
+  
+  @@map("admins")
+}
+
+model NominationEvent {
+  id                    String   @id @default(cuid())
+  name                  String
+  description           String?
+  rules                 String?
+  slug                  String   @unique
+  
+  // Time controls
+  nominationStartTime   DateTime
+  nominationEndTime     DateTime
+  withdrawalStartTime   DateTime
+  withdrawalEndTime     DateTime
+  
+  // Time check toggles (important feature you requested)
+  enableTimeCheck       Boolean  @default(true)
+  enableNominationTime  Boolean  @default(true)
+  enableWithdrawalTime  Boolean  @default(true)
+  
+  // Event settings
+  eligibleEmails        String[]
+  isActive              Boolean  @default(true)
+  allowDuplicateEmails  Boolean  @default(false)
+  
+  // Metadata
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdById           String
+  
+  // Relations
+  createdBy             Admin       @relation(fields: [createdById], references: [id])
+  nominations           Nomination[]
+  verificationTokens    VerificationToken[]
+  withdrawalTokens      WithdrawalToken[]
+  
+  @@map("nomination_events")
+}
+
+model Nomination {
+  id                String   @id @default(cuid())
+  eventId           String
+  
+  // User information
+  email             String
+  firstName         String
+  lastName          String
+  faculty           String
+  year              String
+  studentId         String
+  
+  // Nomination details
+  positions         String[] // Array of positions they're nominated for
+  
+  // Security & tracking
+  ipAddress         String
+  location          String?  // Captured location data
+  userAgent         String?
+  
+  // Status
+  isWithdrawn       Boolean  @default(false)
+  withdrawnAt       DateTime?
+  withdrawnPositions String[] // Positions they withdrew from
+  
+  // Metadata
+  submittedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Unique withdrawal token
+  withdrawalToken   String   @unique
+  
+  // Relations
+  event             NominationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  // Ensure one nomination per email per event
+  @@unique([email, eventId])
+  @@map("nominations")
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  eventId   String
+  email     String
+  token     String   @unique
+  otp       String
+  
+  // Security
+  ipAddress String
+  attempts  Int      @default(0)
+  maxAttempts Int    @default(3)
+  
+  // Expiry
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  usedAt    DateTime?
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  
+  // Relations
+  event     NominationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@unique([email, eventId])
+  @@map("verification_tokens")
+}
+
+model WithdrawalToken {
+  id        String   @id @default(cuid())
+  eventId   String
+  email     String
+  token     String   @unique
+  otp       String
+  
+  // Security
+  ipAddress String
+  attempts  Int      @default(0)
+  maxAttempts Int    @default(3)
+  
+  // Expiry
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  usedAt    DateTime?
+  
+  // Metadata
+  createdAt DateTime @default(now())
+  
+  // Relations
+  event     NominationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@unique([email, eventId])
+  @@map("withdrawal_tokens")
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  token     String   @unique
+  ipAddress String
+  userAgent String?
+  
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("admin_sessions")
+}
+
+// Audit logging for admin actions
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String   // CREATE_EVENT, UPDATE_EVENT, etc.
+  entityId  String?  // ID of the entity affected
+  details   Json?    // Additional details about the action
+  ipAddress String
+  
+  createdAt DateTime @default(now())
+  
+  @@map("admin_audit_logs")
+}
+
+// Track rate limiting and security events
+model SecurityLog {
+  id        String   @id @default(cuid())
+  type      String   // RATE_LIMIT, FAILED_AUTH, etc.
+  ipAddress String
+  email     String?
+  details   Json?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([ipAddress, createdAt])
+  @@map("security_logs")
 }
