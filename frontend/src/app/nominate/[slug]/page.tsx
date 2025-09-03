@@ -27,7 +27,7 @@ export default function NominationLanding() {
   const [event, setEvent] = useState<EventDetails | null>(null);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // This was missing
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -54,6 +54,7 @@ export default function NominationLanding() {
 
     try {
       const response = await apiClient.requestNominationOtp(email, slug);
+      // Make sure we pass the email in the redirect
       router.push(`/nominate/${slug}/verify?shortCode=${response.shortCode}&email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err.message || 'Failed to send verification code');

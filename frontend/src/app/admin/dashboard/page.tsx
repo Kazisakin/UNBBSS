@@ -19,10 +19,92 @@ interface Event {
   withdrawalEndTime: string;
   eligibleEmails: string[];
   isActive: boolean;
+  enableTimeCheck: boolean;        // Add these
+  enableNominationTime: boolean;   // Add these  
+  enableWithdrawalTime: boolean;   // Add these
   nominationLink: string;
   _count: {
     nominations: number;
   };
+}
+// Add this interface at the top
+interface TimeControlsProps {
+  event: Event;
+  onUpdate: (eventId: string, settings: any) => void;
+}
+
+// Add this component before the main component
+function TimeControls({ event, onUpdate }: TimeControlsProps) {
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = async (setting: string, value: boolean) => {
+    setLoading(true);
+    try {
+      const response = await apiClient.updateEventTimeSettings(event.id, {
+        [setting]: value
+      });
+      onUpdate(event.id, response.event);
+    } catch (error) {
+      console.error('Failed to update time settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-700 rounded-lg p-4 mt-4">
+      <h4 className="font-semibold text-white mb-3">Time Controls (Testing)</h4>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-300">Enable Time Check</span>
+          <button
+            onClick={() => handleToggle('enableTimeCheck', !event.enableTimeCheck)}
+            disabled={loading}
+            className={`w-12 h-6 rounded-full transition-colors ${
+              event.enableTimeCheck ? 'bg-green-600' : 'bg-gray-600'
+            }`}
+          >
+            <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+              event.enableTimeCheck ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-300">Check Nomination Time</span>
+          <button
+            onClick={() => handleToggle('enableNominationTime', !event.enableNominationTime)}
+            disabled={loading}
+            className={`w-12 h-6 rounded-full transition-colors ${
+              event.enableNominationTime ? 'bg-green-600' : 'bg-gray-600'
+            }`}
+          >
+            <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+              event.enableNominationTime ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-300">Check Withdrawal Time</span>
+          <button
+            onClick={() => handleToggle('enableWithdrawalTime', !event.enableWithdrawalTime)}
+            disabled={loading}
+            className={`w-12 h-6 rounded-full transition-colors ${
+              event.enableWithdrawalTime ? 'bg-green-600' : 'bg-gray-600'
+            }`}
+          >
+            <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+              event.enableWithdrawalTime ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        Disable time checks for testing. Enable for production.
+      </p>
+    </div>
+  );
 }
 
 export default function AdminDashboard() {
@@ -163,75 +245,83 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {events.map((event) => (
-                <motion.div
-                  key={event.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-green-600/50 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">{event.name}</h3>
-                      {event.description && (
-                        <p className="text-gray-400 mt-1">{event.description}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => copyLink(event.slug)}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        <FaCopy className="mr-1" />
-                        Copy Link
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-gray-600"
-                      >
-                        <FaEye className="mr-1" />
-                        View ({event._count?.nominations || 0})
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-gray-600"
-                      >
-                        <FaEdit className="mr-1" />
-                        Edit
-                      </Button>
+               {events.map((event) => (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-green-600/50 transition-colors"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{event.name}</h3>
+                    {event.description && (
+                      <p className="text-gray-400 mt-1">{event.description}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => copyLink(event.slug)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <FaCopy className="mr-1" />
+                      Copy Link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-600"
+                    >
+                      <FaEye className="mr-1" />
+                      View ({event._count?.nominations || 0})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-600"
+                    >
+                      <FaEdit className="mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-400">Nomination Period</div>
+                    <div className="text-white">
+                      {new Date(event.nominationStartTime).toLocaleDateString()} - {new Date(event.nominationEndTime).toLocaleDateString()}
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-400">Nomination Period</div>
-                      <div className="text-white">
-                        {new Date(event.nominationStartTime).toLocaleDateString()} - {new Date(event.nominationEndTime).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Withdrawal Period</div>
-                      <div className="text-white">
-                        {new Date(event.withdrawalStartTime).toLocaleDateString()} - {new Date(event.withdrawalEndTime).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Eligible Voters</div>
-                      <div className="text-white">{event.eligibleEmails.length} emails</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">Status</div>
-                      <div className={event.isActive ? 'text-green-400' : 'text-red-400'}>
-                        {event.isActive ? 'Active' : 'Inactive'}
-                      </div>
+                  <div>
+                    <div className="text-gray-400">Withdrawal Period</div>
+                    <div className="text-white">
+                      {new Date(event.withdrawalStartTime).toLocaleDateString()} - {new Date(event.withdrawalEndTime).toLocaleDateString()}
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </div>
+                  <div>
+                    <div className="text-gray-400">Eligible Voters</div>
+                    <div className="text-white">{event.eligibleEmails.length} emails</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400">Status</div>
+                    <div className={event.isActive ? 'text-green-400' : 'text-red-400'}>
+                      {event.isActive ? 'Active' : 'Inactive'}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Add TimeControls component here to manage event time updates */}
+                <TimeControls
+                  event={event}
+                  onUpdate={(eventId, updatedEvent) => {
+                    setEvents(events.map(e => e.id === eventId ? { ...e, ...updatedEvent } : e));
+                  }}
+                />
+              </motion.div>
+            ))}
+          </div>
           )}
         </div>
       </div>

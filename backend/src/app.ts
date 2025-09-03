@@ -10,7 +10,7 @@ import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 import nominationRoutes from './routes/nomination';
 import cookieParser from 'cookie-parser';
-
+import withdrawalRoutes from './routes/withdrawal';
 dotenv.config();
 
 const app = express();
@@ -27,9 +27,12 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true, // This is crucial for cookies
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Body parsing
@@ -43,6 +46,7 @@ app.use(morgan('combined'));
 // Routes
 app.use('/api/admin', adminRoutes);
 app.use('/api/nomination', nominationRoutes);
+app.use('/api/withdrawal', withdrawalRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

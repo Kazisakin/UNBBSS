@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { apiClient } from '@/lib/api';
 import { motion } from 'framer-motion';
-import { FaSpinner, FaUser, FaGraduationCap, FaIdCard } from 'react-icons/fa';
+import { FaSpinner, FaUser, FaGraduationCap, FaIdCard, FaEnvelope, FaLock } from 'react-icons/fa';
 
 interface FormData {
   firstName: string;
@@ -18,6 +17,11 @@ interface FormData {
   faculty: string;
   year: string;
   positions: string[];
+}
+
+interface UserSession {
+  email: string;
+  eventName: string;
 }
 
 const POSITIONS = [
@@ -42,6 +46,7 @@ export default function NominationForm() {
   const router = useRouter();
   const slug = params.slug as string;
 
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -50,9 +55,35 @@ export default function NominationForm() {
     year: '',
     positions: [],
   });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    // Check if user has valid session from verification
+    checkSession();
+  }, [slug, router]);
+
+const checkSession = async () => {
+  try {
+    const response = await fetch('http://localhost:5000/api/nomination/session', {
+      credentials: 'include',
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      setUserSession(data);
+    } else {
+      router.push(`/nominate/${slug}`);
+      return;
+    }
+  } catch (err) {
+    router.push(`/nominate/${slug}`);
+    return;
+  }
+  
+  setLoading(false);
+};
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -93,36 +124,71 @@ export default function NominationForm() {
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  const validationError = validateForm();
+  if (validationError) {
+    setError(validationError);
+    return;
+  }
 
-    setLoading(true);
-    setError('');
+  setSubmitting(true);
+  setError('');
 
-    try {
-      const submissionData = {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        studentId: formData.studentId.trim(),
-        faculty: formData.faculty.trim(),
-        year: formData.year,
-        positions: formData.positions,
-      };
+  try {
+    const submissionData = {
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      studentId: formData.studentId.trim(),
+      faculty: formData.faculty.trim(),
+      year: formData.year,
+      positions: formData.positions,
+    };
 
-      await apiClient.submitNomination(submissionData);
+    // Use direct fetch instead of apiClient to ensure cookies are sent
+    const response = await fetch('http://localhost:5000/api/nomination/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Crucial for sending cookies
+      body: JSON.stringify(submissionData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
       router.push(`/nominate/${slug}/success`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit nomination');
-    } finally {
-      setLoading(false);
+    } else {
+      setError(data.error || 'Failed to submit nomination');
     }
-  };
+  } catch (err: any) {
+    setError('Network error. Please try again.');
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <FaSpinner className="animate-spin text-green-600 w-8 h-8" />
+      </div>
+    );
+  }
+
+  if (!userSession) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="bg-gray-800 rounded-lg p-8 text-center max-w-md">
+          <h1 className="text-xl font-bold text-white mb-4">Session Required</h1>
+          <p className="text-gray-400 mb-4">Please verify your email first to access this form.</p>
+          <Button onClick={() => router.push(`/nominate/${slug}`)} className="bg-green-600 hover:bg-green-700">
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -133,8 +199,28 @@ export default function NominationForm() {
           className="bg-gray-800 rounded-lg p-8"
         >
           <h1 className="text-2xl font-bold mb-6 text-center">Complete Your Nomination</h1>
+          <p className="text-center text-gray-400 mb-6">for {userSession.eventName}</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Display - Grayed Out */}
+            <div className="space-y-4">
+              <div>
+                <Label className="block text-white/90 mb-2">
+                  <FaEnvelope className="inline mr-2" />
+                  Email Address
+                </Label>
+                <div className="relative">
+                  <Input
+                    value={userSession.email}
+                    disabled
+                    className="bg-gray-600/50 border-gray-500 text-gray-300 cursor-not-allowed"
+                  />
+                  <FaLock className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
+                <p className="text-gray-500 text-xs mt-1">This email was verified for this nomination</p>
+              </div>
+            </div>
+
             {/* Personal Information */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
@@ -217,7 +303,7 @@ export default function NominationForm() {
               </div>
             </div>
 
-            {/* Position Selection */}
+            {/* Position Selection - Fixed without Checkbox component */}
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold mb-4">Positions *</h2>
@@ -235,11 +321,18 @@ export default function NominationForm() {
                       }`}
                       onClick={() => handlePositionToggle(position)}
                     >
-                      <Checkbox
-                        checked={formData.positions.includes(position)}
-                        onChange={() => handlePositionToggle(position)}
-                        className="pointer-events-none"
-                      />
+                      {/* Custom checkbox replacement */}
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                        formData.positions.includes(position)
+                          ? 'bg-green-600 border-green-600'
+                          : 'border-gray-400'
+                      }`}>
+                        {formData.positions.includes(position) && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
                       <Label className="text-white cursor-pointer flex-1">
                         {position}
                       </Label>
@@ -263,10 +356,10 @@ export default function NominationForm() {
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={submitting}
               className="w-full bg-green-600 hover:bg-green-700 py-3 text-lg font-semibold"
             >
-              {loading ? (
+              {submitting ? (
                 <>
                   <FaSpinner className="animate-spin mr-2" />
                   Submitting Nomination...

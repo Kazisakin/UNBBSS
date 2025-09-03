@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { getClientIP, getUserAgent, getLocationFromIP, logSecurityEvent } from '../services/locationService';
 
 const prisma = new PrismaClient();
 
@@ -35,11 +36,6 @@ const generateOTP = (): string => {
 // Generate short code for verification
 const generateShortCode = (): string => {
   return crypto.randomBytes(12).toString('base64').replace(/[+/=]/g, '').substring(0, 16);
-};
-
-// Get client IP
-const getClientIP = (req: Request): string => {
-  return req.ip || req.connection.remoteAddress || 'unknown';
 };
 
 export const requestOtp = async (req: Request, res: Response) => {
@@ -190,16 +186,19 @@ export const verifyOtp = async (req: Request, res: Response) => {
       process.env.JWT_SECRET!
     );
 
+    // Set cookie with proper settings for localhost
     res.cookie('sessionToken', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 30 * 60 * 1000,
+      secure: false, // Set to false for localhost development
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for cross-origin
+      maxAge: 30 * 60 * 1000, // 30 minutes
+      domain: 'localhost', // Explicitly set domain for localhost
     });
 
     res.json({ 
       message: 'OTP verified successfully',
-      eventName: verification.event.name 
+      eventName: verification.event.name,
+      redirectTo: `/nominate/${verification.event.slug}/form` // Add redirect info
     });
   } catch (error) {
     console.error('Verify OTP error:', error);
@@ -230,6 +229,14 @@ export const submitNomination = async (req: Request, res: Response) => {
 
     const formData = submitNominationSchema.parse(req.body);
     const clientIP = getClientIP(req);
+    const userAgent = getUserAgent(req);
+    const location = await getLocationFromIP(clientIP);
+
+    // Log security event
+    logSecurityEvent('NOMINATION_SUBMITTED', clientIP, userAgent, {
+      email: decoded.email.split('@')[0] + '@***', // Masked email
+      eventId: decoded.eventId,
+    });
 
     // Get event
     const event = await prisma.nominationEvent.findUnique({
@@ -260,7 +267,7 @@ export const submitNomination = async (req: Request, res: Response) => {
     // Generate withdrawal token
     const withdrawalToken = crypto.randomBytes(32).toString('hex');
 
-    // Create nomination
+    // Create nomination with location data
     const nomination = await prisma.nomination.create({
       data: {
         eventId: event.id,
@@ -273,6 +280,7 @@ export const submitNomination = async (req: Request, res: Response) => {
         positions: formData.positions,
         withdrawalToken,
         ipAddress: clientIP,
+        location: location || null,
       },
     });
 
@@ -333,9 +341,13 @@ export const submitNomination = async (req: Request, res: Response) => {
 export const getEventDetails = async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
+    
+    if (!slug) {
+      return res.status(400).json({ error: 'Event slug is required' });
+    }
 
     const event = await prisma.nominationEvent.findFirst({
-      where: { slug: slug || "", isActive: true },
+      where: { slug, isActive: true },
       select: {
         id: true,
         name: true,
@@ -365,6 +377,44 @@ export const getEventDetails = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get event details error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getSession = async (req: Request, res: Response) => {
+  try {
+    const sessionToken = req.cookies.sessionToken;
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'No session found' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(sessionToken, process.env.JWT_SECRET!) as {
+        email: string;
+        eventId: string;
+        exp: number;
+      };
+    } catch {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    // Get event details
+    const event = await prisma.nominationEvent.findUnique({
+      where: { id: decoded.eventId },
+      select: { name: true }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    res.json({
+      email: decoded.email,
+      eventName: event.name
+    });
+  } catch (error) {
+    console.error('Get session error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

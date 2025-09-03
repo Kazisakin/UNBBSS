@@ -5,7 +5,6 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClient } from '@/lib/api';
 import { motion } from 'framer-motion';
 import { FaSpinner, FaArrowLeft } from 'react-icons/fa';
 
@@ -16,17 +15,19 @@ export default function VerifyOtp() {
   
   const slug = params.slug as string;
   const shortCode = searchParams.get('shortCode');
-  const email = searchParams.get('email');
+  const emailParam = searchParams.get('email');
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [email, setEmail] = useState(emailParam || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needsEmail, setNeedsEmail] = useState(!emailParam);
 
   useEffect(() => {
-    if (!shortCode || !email) {
+    if (!shortCode) {
       router.push(`/nominate/${slug}`);
     }
-  }, [shortCode, email, slug, router]);
+  }, [shortCode, slug, router]);
 
   const handleOtpChange = (index: number, value: string) => {
     if (/^\d?$/.test(value)) {
@@ -60,18 +61,47 @@ export default function VerifyOtp() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shortCode || otp.some(digit => !digit)) return;
+    
+    // Check if we have email
+    if (needsEmail && !email.endsWith('@unb.ca')) {
+      setError('Please enter a valid @unb.ca email address');
+      return;
+    }
+
+    if (!shortCode || otp.some(digit => !digit)) {
+      setError('Please enter the complete 6-digit code');
+      return;
+    }
 
     setLoading(true);
     setError('');
 
     try {
-      await apiClient.verifyNominationOtp(shortCode, otp.join(''));
-      router.push(`/nominate/${slug}/form`);
+      const response = await fetch('http://localhost:5000/api/nomination/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          shortCode, 
+          otp: otp.join('') 
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setTimeout(() => {
+          router.push(`/nominate/${slug}/form`);
+        }, 500);
+      } else {
+        setError(data.error || 'Invalid verification code');
+        setOtp(['', '', '', '', '', '']);
+        setTimeout(() => document.getElementById('otp-0')?.focus(), 100);
+      }
     } catch (err: any) {
-      setError(err.message || 'Invalid verification code');
-      setOtp(['', '', '', '', '', '']); // Clear OTP on error
-      document.getElementById('otp-0')?.focus();
+      setError('Network error. Please try again.');
+      setOtp(['', '', '', '', '', '']);
+      setTimeout(() => document.getElementById('otp-0')?.focus(), 100);
     } finally {
       setLoading(false);
     }
@@ -95,53 +125,92 @@ export default function VerifyOtp() {
           className="bg-gray-800 rounded-lg p-8 text-center"
         >
           <h1 className="text-2xl font-bold mb-4">Verify Your Email</h1>
-          <p className="text-gray-400 mb-6">
-            Enter the 6-digit code sent to <br />
-            <span className="text-white font-semibold">{email}</span>
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <Label className="block text-white/90 mb-4">Verification Code</Label>
-              <div className="flex gap-2 justify-center">
-                {otp.map((digit, index) => (
-                  <Input
-                    key={index}
-                    id={`otp-${index}`}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    onPaste={index === 0 ? handlePaste : undefined}
-                    className="w-12 h-12 text-center text-xl font-bold bg-gray-700 border-gray-600"
-                  />
-                ))}
-              </div>
+          
+          {needsEmail ? (
+            <div className="space-y-4 mb-6">
+              <p className="text-gray-400">Please enter your email to continue:</p>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your.email@unb.ca"
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+              <Button
+                onClick={() => {
+                  if (email.endsWith('@unb.ca')) {
+                    setNeedsEmail(false);
+                    setError('');
+                  } else {
+                    setError('Please enter a valid @unb.ca email');
+                  }
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                Continue
+              </Button>
             </div>
+          ) : (
+            <>
+              <p className="text-gray-400 mb-6">
+                Enter the 6-digit code sent to <br />
+                <span className="text-white font-semibold">{email}</span>
+              </p>
 
-            {error && (
-              <div className="bg-red-600/20 border border-red-600/20 rounded-lg p-3 text-red-100">
-                {error}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <Label className="block text-white/90 mb-4">Verification Code</Label>
+                  <div className="flex gap-2 justify-center">
+                    {otp.map((digit, index) => (
+                      <Input
+                        key={index}
+                        id={`otp-${index}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(index, e)}
+                        onPaste={index === 0 ? handlePaste : undefined}
+                        className="w-12 h-12 text-center text-xl font-bold bg-gray-700 border-gray-600"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={loading || otp.some(digit => !digit)}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {loading ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-2" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify & Continue'
+                  )}
+                </Button>
+              </form>
+
+              <div className="mt-4">
+                <Button
+                  onClick={() => setNeedsEmail(true)}
+                  variant="ghost"
+                  className="text-sm text-gray-400 hover:text-white"
+                >
+                  Change email address
+                </Button>
               </div>
-            )}
+            </>
+          )}
 
-            <Button
-              type="submit"
-              disabled={loading || otp.some(digit => !digit)}
-              className="w-full bg-green-600 hover:bg-green-700"
-            >
-              {loading ? (
-                <>
-                  <FaSpinner className="animate-spin mr-2" />
-                  Verifying...
-                </>
-              ) : (
-                'Verify & Continue'
-              )}
-            </Button>
-          </form>
+          {error && (
+            <div className="bg-red-600/20 border border-red-600/20 rounded-lg p-3 text-red-100 mt-4">
+              {error}
+            </div>
+          )}
 
           <p className="text-gray-500 text-sm mt-4">
             Didn't receive the code? Check your spam folder or go back to request a new one.

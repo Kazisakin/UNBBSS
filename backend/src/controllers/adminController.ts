@@ -186,4 +186,50 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
     console.error('Get events error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+  
+};
+export const updateEventTimeSettings = async (req: AuthRequest, res: Response) => {
+  try {
+    const { eventId } = req.params;
+    
+    if (!eventId) {
+      return res.status(400).json({ error: 'Event ID is required' });
+    }
+    
+    const { enableTimeCheck, enableNominationTime, enableWithdrawalTime } = req.body;
+
+    const event = await prisma.nominationEvent.update({
+      where: { id: eventId as string },
+      data: {
+        enableTimeCheck: enableTimeCheck ?? undefined,
+        enableNominationTime: enableNominationTime ?? undefined,
+        enableWithdrawalTime: enableWithdrawalTime ?? undefined,
+      },
+    });
+
+    // Log the change
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: req.admin!.id,
+        action: 'UPDATE_TIME_SETTINGS',
+        entityId: event.id,
+        ipAddress: req.ip || 'unknown',
+        details: { enableTimeCheck, enableNominationTime, enableWithdrawalTime }
+      }
+    });
+
+    res.json({ 
+      message: 'Time settings updated',
+      event: {
+        id: event.id,
+        name: event.name,
+        enableTimeCheck: event.enableTimeCheck,
+        enableNominationTime: event.enableNominationTime,
+        enableWithdrawalTime: event.enableWithdrawalTime,
+      }
+    });
+  } catch (error) {
+    console.error('Update time settings error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };

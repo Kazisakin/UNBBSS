@@ -83,31 +83,61 @@ class ApiClient {
   async getEvents() {
     return this.request('/api/admin/events');
   }
+
   // Nomination methods
-async getEventDetails(slug: string) {
-  return this.request(`/api/nomination/event/${slug}`);
-}
+  async getEventDetails(slug: string) {
+    return this.request(`/api/nomination/event/${slug}`);
+  }
 
-async requestNominationOtp(email: string, slug: string) {
-  return this.request('/api/nomination/request-otp', {
-    method: 'POST',
-    body: JSON.stringify({ email, slug }),
-  });
-}
+  async requestNominationOtp(email: string, slug: string) {
+    return this.request('/api/nomination/request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, slug }),
+    });
+  }
 
-async verifyNominationOtp(shortCode: string, otp: string) {
-  return this.request('/api/nomination/verify-otp', {
-    method: 'POST',
-    body: JSON.stringify({ shortCode, otp }),
-  });
-}
+  async verifyNominationOtp(shortCode: string, otp: string) {
+    return this.request('/api/nomination/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ shortCode, otp }),
+    });
+  }
 
-async submitNomination(nominationData: any) {
-  return this.request('/api/nomination/submit', {
-    method: 'POST',
-    body: JSON.stringify(nominationData),
-  });
-}
+  async submitNomination(nominationData: any) {
+    return this.request('/api/nomination/submit', {
+      method: 'POST',
+      body: JSON.stringify(nominationData),
+    });
+  }
+
+  // Session check
+  async getSession() {
+    const url = `${this.baseURL}/api/nomination/session`;
+    
+    try {
+      const response = await fetch(url, {
+        credentials: 'include', // This sends cookies
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Session check failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Session check error:', error);
+      throw error;
+    }
+  }
+  // Add this method to the ApiClient class
+  async updateEventTimeSettings(eventId: string, settings: any) {
+    return this.request(`/api/admin/events/${eventId}/time-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();
