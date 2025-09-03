@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 
 import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
+import nominationRoutes from './routes/nomination';
+import cookieParser from 'cookie-parser';
 
 dotenv.config();
 
@@ -33,12 +35,14 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Logging
 app.use(morgan('combined'));
 
 // Routes
 app.use('/api/admin', adminRoutes);
+app.use('/api/nomination', nominationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
