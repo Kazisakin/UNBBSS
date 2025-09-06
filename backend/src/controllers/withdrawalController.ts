@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
-import crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+import * as nodemailer from 'nodemailer';
+import * as crypto from 'crypto';
 import { z } from 'zod';
 
 const prisma = new PrismaClient();

@@ -1,15 +1,15 @@
-import express from 'express';
-import cors from 'cors';
+import * as express from 'express';
+import * as cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
-import compression from 'compression';
+import * as morgan from 'morgan';
+import * as compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
+import * as  dotenv from 'dotenv';
 
 import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 import nominationRoutes from './routes/nomination';
-import cookieParser from 'cookie-parser';
+import * as cookieParser from 'cookie-parser';
 import withdrawalRoutes from './routes/withdrawal';
 import votingRoutes from './routes/voting';
 dotenv.config();

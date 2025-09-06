@@ -1,4 +1,4 @@
-import express from 'express';
+import * as express from 'express';
 import { adminAuth, authRateLimit, AuthRequest, requireAdmin } from '../middleware/adminAuth';
 import { 
   adminLogin,
