@@ -96,8 +96,8 @@ export default function CreateEventModal({ isOpen, onClose, onEventCreated }: Cr
         eligibleEmails: formData.eligibleEmails,
       };
 
-      const response = await apiClient.createEvent(eventData);
-      onEventCreated(response.event);
+      await apiClient.createNominationEvent(eventData);
+      onEventCreated(eventData);
 
       // Reset form
       setFormData({

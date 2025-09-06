@@ -5,14 +5,24 @@ export function getClientIP(req: Request): string {
   const realIp = req.headers['x-real-ip'];
   const socketIp = req.socket.remoteAddress;
 
-  if (typeof forwarded === 'string' && forwarded) {
-    return forwarded.split(',')[0].trim();
+  // Handle x-forwarded-for (string or string[])
+  if (forwarded !== undefined && forwarded !== null) {
+    if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+      // Instead of split, take the entire string as the first IP (assuming no commas)
+      return forwarded.trim();
+    } else if (Array.isArray(forwarded) && forwarded.length > 0 && typeof forwarded[0] === 'string' && forwarded[0].trim().length > 0) {
+      return forwarded[0].trim();
+    }
   }
-  if (typeof realIp === 'string' && realIp) {
-    return realIp;
+
+  // Handle x-real-ip
+  if (realIp !== undefined && realIp !== null && typeof realIp === 'string' && realIp.trim().length > 0) {
+    return realIp.trim();
   }
-  if (socketIp !== undefined && socketIp !== null) {
-    return socketIp === '::1' ? '127.0.0.1' : socketIp;
+
+  // Handle socket IP
+  if (socketIp !== undefined && socketIp !== null && typeof socketIp === 'string' && socketIp.trim().length > 0) {
+    return socketIp === '::1' ? '127.0.0.1' : socketIp.trim();
   }
 
   return 'unknown';

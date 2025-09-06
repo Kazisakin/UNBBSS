@@ -1,4 +1,3 @@
-// backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,17 +8,556 @@ datasource db {
 }
 
 model Admin {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id                String      @id @default(cuid())
+  
+  // Basic Information (Encrypted)
+  email             String      @unique // Will be encrypted in application layer
+  name              String?     // Will be encrypted in application layer
+  role              AdminRole   @default(ADMIN)
+  
+  // Authentication
+  passwordHash      String      // Argon2id hash
+  salt              String      // Unique salt for each admin
+  
+  // 2FA Settings
+  twoFactorEnabled  Boolean     @default(false)
+  twoFactorSecret   String?     // Encrypted TOTP secret
+  backupCodes       String[]    // Encrypted one-time recovery codes
+  
+  // Account Status
+  isActive          Boolean     @default(false)
+  isVerified        Boolean     @default(false)
+  isLocked          Boolean     @default(false)
+  lastLoginAt       DateTime?
+  lastPasswordChange DateTime?
+  
+  // Invitation Management
+  invitedBy         String?
+  invitedAt         DateTime?
+  invitationToken   String?     @unique
+  invitationExpiry  DateTime?
+  activatedAt       DateTime?
+  
+  // Security Tracking
+  failedAttempts    Int         @default(0)
+  lockedUntil       DateTime?
+  mustChangePassword Boolean    @default(true)
+  loginAttempts     Json[]      // Array of login attempt records
+  
+  // Profile Management
+  profileCompletedAt DateTime?
+  lastProfileUpdate  DateTime?
+  
+  // Metadata
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
   // Relations
-  createdEvents NominationEvent[]
+  inviter           Admin?      @relation("AdminInviter", fields: [invitedBy], references: [id])
+  invitedAdmins     Admin[]     @relation("AdminInviter")
+  
+  // Event Relations
+  createdNominationEvents NominationEvent[] @relation("NominationEventsCreatedBy")
+  createdVotingEvents      VotingEvent[]     @relation("VotingEventsCreatedBy")
+  
+  // Security Relations
+  adminSessions     AdminSession[]
+  adminAuditLogs    AdminAuditLog[]
+  adminActions      AdminAction[]    @relation("AdminActionsPerformed")
+  adminTargeted     AdminAction[]    @relation("AdminActionsReceived")
   
   @@map("admins")
+}
+
+model AdminSession {
+  id           String   @id @default(cuid())
+  adminId      String
+  sessionToken String   @unique
+  
+  // Device & Location
+  ipAddress    String
+  userAgent    String?
+  deviceInfo   Json?    // Browser, OS, etc.
+  location     String?  // City, Country
+  
+  // Session Status
+  isActive     Boolean  @default(true)
+  lastActivity DateTime @default(now())
+  
+  // Security
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokedBy    String?  // Admin ID who revoked
+  
+  // Metadata
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  
+  @@index([adminId, isActive])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  
+  // Action Details
+  action    AdminActionType
+  entityType String?          // "NominationEvent", "VotingEvent", "Admin", etc.
+  entityId  String?          // ID of the affected entity
+  
+  // Request Context
+  ipAddress String
+  userAgent String?
+  endpoint  String?          // API endpoint called
+  method    String?          // HTTP method
+  
+  // Change Tracking
+  oldValues Json?           // Previous state
+  newValues Json?           // New state
+  details   Json?           // Additional context
+  
+  // Status
+  success   Boolean         @default(true)
+  errorMessage String?
+  
+  // Metadata
+  createdAt DateTime        @default(now())
+  
+  // Relations
+  admin     Admin          @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@map("admin_audit_logs")
+}
+
+model AdminAction {
+  id            String          @id @default(cuid())
+  performedBy   String
+  targetAdmin   String?         // For admin management actions
+  
+  // Action Details
+  actionType    AdminActionType
+  description   String
+  metadata      Json?
+  
+  // Status
+  success       Boolean         @default(true)
+  errorMessage  String?
+  
+  // Context
+  ipAddress     String
+  userAgent     String?
+  
+  // Metadata
+  createdAt     DateTime        @default(now())
+  
+  // Relations
+  performer     Admin          @relation("AdminActionsPerformed", fields: [performedBy], references: [id], onDelete: Cascade)
+  target        Admin?         @relation("AdminActionsReceived", fields: [targetAdmin], references: [id], onDelete: Cascade)
+  
+  @@index([performedBy, createdAt])
+  @@index([targetAdmin, createdAt])
+  @@index([actionType, createdAt])
+  @@map("admin_actions")
+}
+
+model TwoFactorAttempt {
+  id            String   @id @default(cuid())
+  adminId       String
+  
+  // Attempt Details
+  code          String   // Attempted code (hashed)
+  success       Boolean
+  attemptType   String   // "TOTP", "BACKUP_CODE", "EMAIL"
+  
+  // Security
+  ipAddress     String
+  userAgent     String?
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  
+  @@index([adminId, createdAt])
+  @@index([success, createdAt])
+  @@map("two_factor_attempts")
+}
+
+model PasswordResetToken {
+  id            String   @id @default(cuid())
+  adminId       String
+  
+  // Token Details
+  token         String   @unique
+  hashedToken   String   // Hashed version for security
+  
+  // Expiry & Usage
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  usedAt        DateTime?
+  
+  // Request Context
+  requestedBy   String?  // Admin ID if reset by super admin
+  ipAddress     String
+  userAgent     String?
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  
+  @@index([token])
+  @@index([adminId, isUsed])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model SecurityEvent {
+  id            String           @id @default(cuid())
+  
+  // Event Classification
+  eventType     SecurityEventType
+  severity      SecuritySeverity  @default(LOW)
+  
+  // Affected Entity
+  adminId       String?
+  ipAddress     String
+  userAgent     String?
+  
+  // Event Details
+  description   String
+  metadata      Json?
+  
+  // Resolution
+  resolved      Boolean          @default(false)
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  resolution    String?
+  
+  // Metadata
+  createdAt     DateTime         @default(now())
+  
+  @@index([eventType, createdAt])
+  @@index([adminId, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([resolved, createdAt])
+  @@map("security_events")
+}
+
+model SystemActivity {
+  id            String              @id @default(cuid())
+  
+  // Activity Classification
+  activityType  SystemActivityType
+  category      ActivityCategory
+  severity      ActivitySeverity    @default(INFO)
+  
+  // Actor Information
+  actorType     ActorType           // ADMIN, VOTER, SYSTEM, ANONYMOUS
+  actorId       String?             // Admin ID, voter email, or null for anonymous
+  actorEmail    String?             // Email if available
+  actorName     String?             // Name if available
+  
+  // Target Information (what was affected)
+  targetType    String?             // "Admin", "NominationEvent", "Vote", etc.
+  targetId      String?             // ID of the affected entity
+  targetEmail   String?             // Email if target is a user
+  
+  // Request Context
+  ipAddress     String
+  userAgent     String?
+  location      String?             // Geographic location
+  endpoint      String?             // API endpoint
+  method        String?             // HTTP method
+  
+  // Activity Details
+  description   String              // Human readable description
+  metadata      Json?               // Additional context data
+  
+  // Success/Failure
+  success       Boolean             @default(true)
+  errorCode     String?
+  errorMessage  String?
+  
+  // Timing
+  duration      Int?                // Time taken in milliseconds
+  
+  // Related Events
+  sessionId     String?             // Link related activities
+  correlationId String?             // Track multi-step processes
+  
+  // Metadata
+  createdAt     DateTime            @default(now())
+  
+  // Relations
+  detailedAuditLogs DetailedAuditLog[]
+  
+  // Indexes for efficient querying
+  @@index([activityType, createdAt])
+  @@index([actorType, actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([ipAddress, createdAt])
+  @@index([sessionId])
+  @@index([success, createdAt])
+  @@map("system_activities")
+}
+
+model DetailedAuditLog {
+  id                String          @id @default(cuid())
+  
+  // Reference to system activity
+  systemActivityId  String?
+  
+  // Detailed Change Tracking
+  entityType        String          // Table/Model name
+  entityId          String          // Record ID
+  
+  // Change Details
+  changeType        ChangeType      // CREATE, UPDATE, DELETE, VIEW
+  fieldChanges      Json?           // Field-by-field changes
+  previousState     Json?           // Complete previous state
+  newState          Json?           // Complete new state
+  
+  // Actor Context
+  performedBy       String?         // Admin ID
+  performedByEmail  String?
+  performedByRole   AdminRole?
+  
+  // Request Context
+  ipAddress         String
+  userAgent         String?
+  endpoint          String?
+  
+  // Business Context
+  businessReason    String?         // Why the change was made
+  approvedBy        String?         // If approval was required
+  
+  // Metadata
+  createdAt         DateTime        @default(now())
+  
+  // Relations
+  systemActivity    SystemActivity? @relation(fields: [systemActivityId], references: [id])
+  
+  @@index([entityType, entityId, createdAt])
+  @@index([performedBy, createdAt])
+  @@index([changeType, createdAt])
+  @@map("detailed_audit_logs")
+}
+
+model UserInteractionLog {
+  id              String                @id @default(cuid())
+  
+  // User Context
+  userType        UserType              // VOTER, NOMINEE
+  userEmail       String?
+  userName        String?
+  userStudentId   String?
+  
+  // Interaction Details
+  interactionType UserInteractionType
+  eventId         String?               // Related event ID
+  eventType       String?               // "nomination" or "voting"
+  
+  // Process Tracking
+  processStep     String?               // "email_verification", "otp_entry", etc.
+  stepResult      StepResult            @default(SUCCESS)
+  
+  // Request Context
+  ipAddress       String
+  userAgent       String?
+  location        String?
+  deviceInfo      Json?
+  
+  // Timing & Performance
+  pageLoadTime    Int?                  // Milliseconds
+  timeOnPage      Int?                  // Seconds spent
+  previousPage    String?
+  nextPage        String?
+  
+  // Detailed Data
+  formData        Json?                 // Form submissions (sanitized)
+  interactionData Json?                 // Click events, etc.
+  
+  // Error Tracking
+  errors          Json[]                // Any errors encountered
+  warnings        Json[]                // Warnings shown to user
+  
+  // Security Flags
+  suspicious      Boolean               @default(false)
+  flagReason      String?
+  
+  // Session Tracking
+  sessionId       String?
+  correlationId   String?
+  
+  // Metadata
+  createdAt       DateTime              @default(now())
+  
+  @@index([userEmail, createdAt])
+  @@index([interactionType, createdAt])
+  @@index([eventId, userType])
+  @@index([suspicious, createdAt])
+  @@index([sessionId])
+  @@map("user_interaction_logs")
+}
+
+model AuthenticationLog {
+  id                String              @id @default(cuid())
+  
+  // User Identity
+  userType          UserType            // ADMIN, VOTER
+  userId            String?             // Admin ID or voter email
+  email             String?
+  
+  // Authentication Details
+  authType          AuthenticationType
+  authMethod        String?             // "password", "2fa", "magic_link"
+  
+  // Attempt Details
+  success           Boolean
+  failureReason     String?
+  attemptsCount     Int                 @default(1)
+  
+  // 2FA Specific
+  twoFactorType     String?             // "totp", "email", "backup_code"
+  twoFactorSuccess  Boolean?
+  
+  // Security Context
+  ipAddress         String
+  userAgent         String?
+  location          String?
+  deviceFingerprint String?
+  
+  // Risk Assessment
+  riskScore         Float?              // 0.0 to 1.0
+  riskFactors       String[]            // Suspicious patterns
+  blocked           Boolean             @default(false)
+  blockReason       String?
+  
+  // Session Information
+  sessionId         String?
+  sessionDuration   Int?                // If logout, duration in seconds
+  
+  // Related Events
+  correlationId     String?
+  relatedEventId    String?
+  
+  // Metadata
+  createdAt         DateTime            @default(now())
+  
+  @@index([userType, userId, createdAt])
+  @@index([email, success, createdAt])
+  @@index([authType, success])
+  @@index([ipAddress, createdAt])
+  @@index([blocked, createdAt])
+  @@map("authentication_logs")
+}
+
+model EmailActivityLog {
+  id              String          @id @default(cuid())
+  
+  // Email Details
+  emailType       EmailType
+  recipient       String          // Email address
+  subject         String?
+  
+  // Context
+  triggeredBy     String?         // Admin ID or system
+  relatedEntity   String?         // Event ID, user ID, etc.
+  entityType      String?         // "nomination_event", "voting_event", etc.
+  
+  // Delivery Status
+  status          EmailStatus     @default(QUEUED)
+  provider        String?         // SMTP provider used
+  messageId       String?         // Provider message ID
+  
+  // Tracking
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  
+  // Content (sanitized)
+  templateUsed    String?
+  variables       Json?           // Template variables
+  
+  // Error Handling
+  failureReason   String?
+  retryCount      Int             @default(0)
+  maxRetries      Int             @default(3)
+  
+  // Security
+  ipAddress       String?
+  userAgent       String?         // If opened/clicked
+  
+  // Metadata
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([recipient, emailType, createdAt])
+  @@index([status, createdAt])
+  @@index([relatedEntity, entityType])
+  @@index([triggeredBy, createdAt])
+  @@map("email_activity_logs")
+}
+
+model DataAccessLog {
+  id              String          @id @default(cuid())
+  
+  // Accessor Information
+  accessorType    ActorType       // ADMIN, VOTER, SYSTEM
+  accessorId      String?         // Admin ID
+  accessorEmail   String?
+  accessorRole    AdminRole?      // If admin
+  
+  // Data Accessed
+  dataType        String          // "nominations", "votes", "admin_list", etc.
+  entityId        String?         // Specific record ID
+  eventId         String?         // If event-related
+  
+  // Access Details
+  accessType      DataAccessType  // READ, EXPORT, SEARCH, AGGREGATE
+  accessReason    String?         // Business justification
+  
+  // Query Information
+  queryType       String?         // "list", "detail", "search", "report"
+  searchTerms     String?         // If search was performed
+  filters         Json?           // Applied filters
+  recordsReturned Int?            // Number of records accessed
+  
+  // Export Details (if applicable)
+  exportFormat    String?         // "csv", "json", "pdf"
+  exportSize      Int?            // File size in bytes
+  
+  // Request Context
+  ipAddress       String
+  userAgent       String?
+  endpoint        String?
+  
+  // Approval Chain (for sensitive data)
+  requiresApproval Boolean        @default(false)
+  approvedBy      String?         // Admin ID
+  approvedAt      DateTime?
+  approvalReason  String?
+  
+  // Security Flags
+  sensitive       Boolean         @default(false)
+  flagged         Boolean         @default(false)
+  flagReason      String?
+  
+  // Metadata
+  createdAt       DateTime        @default(now())
+  
+  @@index([accessorType, accessorId, createdAt])
+  @@index([dataType, accessType, createdAt])
+  @@index([eventId, dataType])
+  @@index([sensitive, flagged])
+  @@index([requiresApproval, approvedAt])
+  @@map("data_access_logs")
 }
 
 model NominationEvent {
@@ -35,7 +573,7 @@ model NominationEvent {
   withdrawalStartTime   DateTime
   withdrawalEndTime     DateTime
   
-  // Time check toggles (important feature you requested)
+  // Time check toggles
   enableTimeCheck       Boolean  @default(true)
   enableNominationTime  Boolean  @default(true)
   enableWithdrawalTime  Boolean  @default(true)
@@ -51,7 +589,7 @@ model NominationEvent {
   createdById           String
   
   // Relations
-  createdBy             Admin       @relation(fields: [createdById], references: [id])
+  createdBy             Admin       @relation("NominationEventsCreatedBy", fields: [createdById], references: [id])
   nominations           Nomination[]
   verificationTokens    VerificationToken[]
   withdrawalTokens      WithdrawalToken[]
@@ -153,34 +691,118 @@ model WithdrawalToken {
   @@map("withdrawal_tokens")
 }
 
-model AdminSession {
-  id        String   @id @default(cuid())
-  adminId   String
-  token     String   @unique
-  ipAddress String
-  userAgent String?
+model VotingEvent {
+  id                String      @id @default(cuid())
+  name              String
+  description       String?
+  rules             String?
+  slug              String      @unique
   
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  // Time controls
+  votingStartTime   DateTime
+  votingEndTime     DateTime
   
-  @@map("admin_sessions")
+  // Time check toggles
+  enableTimeCheck   Boolean     @default(true)
+  enableVotingTime  Boolean     @default(true)
+  
+  // Event settings
+  eligibleEmails    String[]
+  isActive          Boolean     @default(true)
+  
+  // Metadata
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  createdById       String
+  
+  // Relations
+  createdBy         Admin       @relation("VotingEventsCreatedBy", fields: [createdById], references: [id])
+  candidates        Candidate[]
+  votes             Vote[]
+  voteTokens        VoteToken[]
+  
+  @@map("voting_events")
 }
 
-// Audit logging for admin actions
-model AdminAuditLog {
-  id        String   @id @default(cuid())
-  adminId   String
-  action    String   // CREATE_EVENT, UPDATE_EVENT, etc.
-  entityId  String?  // ID of the entity affected
-  details   Json?    // Additional details about the action
-  ipAddress String
+model Candidate {
+  id           String      @id @default(cuid())
+  eventId      String
+  firstName    String
+  lastName     String
+  studentId    String
+  faculty      String
+  year         String
+  positions    String[]    // Array of positions they're running for
   
-  createdAt DateTime @default(now())
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
   
-  @@map("admin_audit_logs")
+  // Relations
+  event        VotingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  votes        Vote[]      @relation("CandidateVotes")
+  
+  @@map("candidates")
 }
 
-// Track rate limiting and security events
+model Vote {
+  id           String      @id @default(cuid())
+  eventId      String
+  
+  // Voter information (not anonymous as requested)
+  voterEmail   String
+  voterFirstName String
+  voterLastName  String
+  voterStudentId String
+  voterFaculty   String
+  voterYear      String
+  
+  // Vote data - stored as JSON with position -> candidateId mapping
+  ballot       Json        // {"President": "candidate_id", "Vice President": "candidate_id"}
+  
+  // Security tracking
+  ipAddress    String
+  location     String?
+  userAgent    String?
+  
+  // Metadata
+  submittedAt  DateTime    @default(now())
+  
+  // Relations
+  event        VotingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  candidates    Candidate[] @relation("CandidateVotes")
+  
+  // Ensure one vote per email per event
+  @@unique([voterEmail, eventId])
+  @@map("votes")
+}
+
+model VoteToken {
+  id           String      @id @default(cuid())
+  eventId      String
+  email        String
+  otp          String
+  token        String      @unique
+  
+  // Security
+  ipAddress    String
+  attempts     Int         @default(0)
+  maxAttempts  Int         @default(3)
+  
+  // Expiry
+  expiresAt    DateTime
+  isUsed       Boolean     @default(false)
+  usedAt       DateTime?
+  
+  // Metadata
+  createdAt    DateTime    @default(now())
+  
+  // Relations
+  event        VotingEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  @@unique([email, eventId])
+  @@map("vote_tokens")
+}
+
 model SecurityLog {
   id        String   @id @default(cuid())
   type      String   // RATE_LIMIT, FAILED_AUTH, etc.
@@ -192,4 +814,233 @@ model SecurityLog {
   
   @@index([ipAddress, createdAt])
   @@map("security_logs")
+}
+
+// Enums
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum AdminActionType {
+  // Authentication
+  LOGIN
+  LOGOUT
+  PASSWORD_CHANGE
+  PASSWORD_RESET
+  ENABLE_2FA
+  DISABLE_2FA
+  
+  // Admin Management (Super Admin only)
+  INVITE_ADMIN
+  ACTIVATE_ADMIN
+  DEACTIVATE_ADMIN
+  DELETE_ADMIN
+  RESET_ADMIN_PASSWORD
+  RESET_ADMIN_2FA
+  CHANGE_ADMIN_ROLE
+  
+  // Event Management
+  CREATE_NOMINATION_EVENT
+  UPDATE_NOMINATION_EVENT
+  DELETE_NOMINATION_EVENT
+  CREATE_VOTING_EVENT
+  UPDATE_VOTING_EVENT
+  DELETE_VOTING_EVENT
+  
+  // Data Operations
+  EXPORT_DATA
+  VIEW_RESULTS
+  VIEW_SUBMISSIONS
+  
+  // System Operations
+  VIEW_AUDIT_LOG
+  VIEW_SECURITY_LOG
+  SYSTEM_CONFIGURATION
+}
+
+enum SecurityEventType {
+  MULTIPLE_FAILED_LOGINS
+  SUSPICIOUS_LOGIN_LOCATION
+  BRUTE_FORCE_ATTEMPT
+  ACCOUNT_LOCKOUT
+  UNUSUAL_ADMIN_ACTIVITY
+  PERMISSION_ESCALATION_ATTEMPT
+  DATA_EXPORT_LARGE
+  SYSTEM_ERROR
+  SECURITY_POLICY_VIOLATION
+}
+
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SystemActivityType {
+  // Authentication & Sessions
+  ADMIN_LOGIN
+  ADMIN_LOGOUT
+  ADMIN_SESSION_EXPIRED
+  VOTER_EMAIL_VERIFICATION
+  VOTER_OTP_REQUEST
+  VOTER_OTP_VERIFY
+  TWO_FACTOR_SETUP
+  TWO_FACTOR_VERIFY
+  PASSWORD_CHANGE
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  
+  // Admin Management
+  ADMIN_INVITED
+  ADMIN_ACTIVATED
+  ADMIN_DEACTIVATED
+  ADMIN_ROLE_CHANGED
+  ADMIN_PASSWORD_RESET
+  ADMIN_2FA_RESET
+  ADMIN_DELETED
+  ADMIN_PROFILE_UPDATED
+  
+  // Event Management
+  NOMINATION_EVENT_CREATED
+  NOMINATION_EVENT_UPDATED
+  NOMINATION_EVENT_DELETED
+  VOTING_EVENT_CREATED
+  VOTING_EVENT_UPDATED
+  VOTING_EVENT_DELETED
+  EVENT_TIME_SETTINGS_CHANGED
+  
+  // User Interactions
+  NOMINATION_SUBMITTED
+  NOMINATION_WITHDRAWN
+  VOTE_SUBMITTED
+  BALLOT_PREVIEWED
+  
+  // Data Operations
+  DATA_EXPORTED
+  RESULTS_VIEWED
+  SUBMISSIONS_VIEWED
+  REPORT_GENERATED
+  
+  // System Events
+  SYSTEM_STARTUP
+  SYSTEM_SHUTDOWN
+  BACKUP_CREATED
+  BACKUP_RESTORED
+  SECURITY_SCAN_COMPLETED
+  
+  // Security Events
+  SUSPICIOUS_ACTIVITY_DETECTED
+  RATE_LIMIT_EXCEEDED
+  UNAUTHORIZED_ACCESS_ATTEMPT
+  DATA_BREACH_DETECTED
+  SECURITY_POLICY_VIOLATION
+}
+
+enum ActivityCategory {
+  AUTHENTICATION
+  AUTHORIZATION
+  ADMIN_MANAGEMENT
+  EVENT_MANAGEMENT
+  USER_INTERACTION
+  DATA_ACCESS
+  SYSTEM_OPERATION
+  SECURITY
+  AUDIT
+  ERROR
+}
+
+enum ActivitySeverity {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum ActorType {
+  ADMIN
+  VOTER
+  SYSTEM
+  ANONYMOUS
+}
+
+enum ChangeType {
+  CREATE
+  UPDATE
+  DELETE
+  VIEW
+  EXPORT
+}
+
+enum UserType {
+  ADMIN
+  VOTER
+  NOMINEE
+  ANONYMOUS
+}
+
+enum UserInteractionType {
+  PAGE_VIEW
+  FORM_SUBMISSION
+  EMAIL_VERIFICATION
+  OTP_REQUEST
+  OTP_VERIFICATION
+  NOMINATION_START
+  NOMINATION_COMPLETE
+  NOMINATION_WITHDRAW
+  VOTING_START
+  VOTING_COMPLETE
+  FILE_DOWNLOAD
+  ERROR_ENCOUNTERED
+}
+
+enum StepResult {
+  SUCCESS
+  FAILURE
+  ABANDONED
+  TIMEOUT
+}
+
+enum AuthenticationType {
+  LOGIN_ATTEMPT
+  LOGOUT
+  SESSION_REFRESH
+  PASSWORD_RESET
+  TWO_FACTOR_SETUP
+  TWO_FACTOR_VERIFY
+  ACCOUNT_LOCKOUT
+  ACCOUNT_UNLOCK
+}
+
+enum EmailType {
+  ADMIN_INVITATION
+  PASSWORD_RESET
+  NOMINATION_CONFIRMATION
+  VOTING_CONFIRMATION
+  OTP_CODE
+  SECURITY_ALERT
+  SYSTEM_NOTIFICATION
+  WELCOME_EMAIL
+  ACCOUNT_ACTIVATION
+}
+
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+}
+
+enum DataAccessType {
+  READ
+  SEARCH
+  EXPORT
+  AGGREGATE
+  REPORT
 }

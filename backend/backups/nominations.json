@@ -1,0 +1,30 @@
+[
+  {
+    "id": "cmf3eoecv0005viw0wqixeikc",
+    "eventId": "cmf38ffuj0002vi7cf4zc4kr1",
+    "email": "kazimostofa.sakin@unb.ca",
+    "firstName": "Kazi Mostofa",
+    "lastName": "Sakin",
+    "faculty": "CS",
+    "year": "2nd Year",
+    "studentId": "3747037",
+    "positions": [
+      "General Secretary",
+      "Webmaster",
+      "Treasurer",
+      "Vice President"
+    ],
+    "ipAddress": "::1",
+    "location": null,
+    "userAgent": null,
+    "isWithdrawn": false,
+    "withdrawnAt": "2025-09-03T03:18:49.467Z",
+    "withdrawnPositions": [
+      "President",
+      "Event Coordinator"
+    ],
+    "submittedAt": "2025-09-03T03:16:36.655Z",
+    "updatedAt": "2025-09-03T03:18:49.469Z",
+    "withdrawalToken": "ddde17852972ec6185c11ecc444a8e703ad157e226b62b092234f7989aac20e1"
+  }
+]

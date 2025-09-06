@@ -40,7 +40,8 @@ const generateShortCode = (): string => {
 
 export const requestOtp = async (req: Request, res: Response) => {
   try {
-    const { email, slug } = requestOtpSchema.parse(req.body);
+    const { email: rawEmail, slug } = requestOtpSchema.parse(req.body);
+    const email = rawEmail.toLowerCase();
     const clientIP = getClientIP(req);
 
     // Find the nomination event
@@ -179,7 +180,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     // Generate session token
     const sessionToken = jwt.sign(
       {
-        email: verification.email,
+        email: verification.email.toLowerCase(),
         eventId: verification.eventId,
         exp: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
       },
@@ -256,8 +257,9 @@ export const submitNomination = async (req: Request, res: Response) => {
     }
 
     // Check for existing nomination
+    const normalizedEmail = decoded.email.toLowerCase();
     const existingNomination = await prisma.nomination.findUnique({
-      where: { email_eventId: { email: decoded.email, eventId: event.id } }
+    where: { email_eventId: { email: normalizedEmail, eventId: event.id } }
     });
 
     if (existingNomination && !existingNomination.isWithdrawn) {

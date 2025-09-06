@@ -11,6 +11,7 @@ import { errorHandler } from './middleware/errorHandler';
 import nominationRoutes from './routes/nomination';
 import cookieParser from 'cookie-parser';
 import withdrawalRoutes from './routes/withdrawal';
+import votingRoutes from './routes/voting';
 dotenv.config();
 
 const app = express();
@@ -47,6 +48,7 @@ app.use(morgan('combined'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/nomination', nominationRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
+app.use('/api/voting', votingRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

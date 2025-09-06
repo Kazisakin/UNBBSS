@@ -1,0 +1,47 @@
+[
+  {
+    "id": "cmf35n48s0002vii43aet8nta",
+    "name": "Test Election 2024",
+    "description": "Test nomination event for development",
+    "rules": "Follow all university guidelines",
+    "slug": "test-election-2024",
+    "nominationStartTime": "2024-12-01T10:00:00.000Z",
+    "nominationEndTime": "2024-12-05T23:59:59.000Z",
+    "withdrawalStartTime": "2024-12-06T00:00:00.000Z",
+    "withdrawalEndTime": "2024-12-07T23:59:59.000Z",
+    "enableTimeCheck": false,
+    "enableNominationTime": false,
+    "enableWithdrawalTime": false,
+    "eligibleEmails": [
+      "test@unb.ca",
+      "student@unb.ca"
+    ],
+    "isActive": true,
+    "allowDuplicateEmails": false,
+    "createdAt": "2025-09-02T23:03:40.348Z",
+    "updatedAt": "2025-09-03T02:59:27.611Z",
+    "createdById": "cmf356jro0000vi08u8inoym7"
+  },
+  {
+    "id": "cmf38ffuj0002vi7cf4zc4kr1",
+    "name": "Fall Elecction",
+    "description": "asda",
+    "rules": "asdasd",
+    "slug": "fall-elecction",
+    "nominationStartTime": "2025-09-03T00:23:00.000Z",
+    "nominationEndTime": "2025-09-12T00:21:00.000Z",
+    "withdrawalStartTime": "2025-09-14T00:21:00.000Z",
+    "withdrawalEndTime": "2025-09-25T00:21:00.000Z",
+    "enableTimeCheck": true,
+    "enableNominationTime": false,
+    "enableWithdrawalTime": false,
+    "eligibleEmails": [
+      "kazimostofa.sakin@unb.ca"
+    ],
+    "isActive": true,
+    "allowDuplicateEmails": false,
+    "createdAt": "2025-09-03T00:21:40.988Z",
+    "updatedAt": "2025-09-03T03:17:53.854Z",
+    "createdById": "cmf356jro0000vi08u8inoym7"
+  }
+]

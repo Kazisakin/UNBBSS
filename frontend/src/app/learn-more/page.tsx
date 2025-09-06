@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { FaShieldAlt, FaCog, FaChartLine, FaLock, FaUserCheck, FaExternalLinkAlt } from 'react-icons/fa';
-
+import { CookiePreferencesButton } from '@/components/CookiePreferencesButton';
 export const metadata: Metadata = {
   title: 'Privacy & Cookie Policy | UNBBSS - University of New Brunswick Business Students\' Society',
   description: 'Comprehensive information about our cookie usage, privacy policies, and data protection practices at the University of New Brunswick Business Students\' Society.',
@@ -433,18 +433,7 @@ export default function LearnMore() {
             <p className="text-green-100 mb-6 max-w-2xl mx-auto">
               Take control of your privacy preferences and enjoy a personalized experience tailored to your needs.
             </p>
-            <button 
-              onClick={() => {
-                // This would trigger the cookie consent banner to reappear
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('unbbss_cookie_consent');
-                  window.location.reload();
-                }
-              }}
-              className="bg-white text-green-600 px-8 py-3 rounded-lg font-semibold hover:bg-green-50 transition-colors duration-200 shadow-lg"
-            >
-              Update Cookie Preferences
-            </button>
+            
           </div>
         </div>
       </div>
